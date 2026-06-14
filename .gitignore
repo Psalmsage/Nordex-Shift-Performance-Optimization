@@ -5,7 +5,9 @@ __pycache__/
 
 # C extensions
 *.so
-
+ShiftData.db/
+nordex_env/
+#environment
 # Distribution / packaging
 .Python
 build/

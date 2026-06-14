@@ -1,0 +1,193 @@
+### OEE Calculation
+
+The code calculates Overall Equipment Effectiveness (OEE) by:
+
+1. **Separating production and machine data** - Creates distinct tables for production metrics (units, defects) and machine metrics (downtime)
+
+2. **Computing three OEE components:**
+   - **Availability** - Machine uptime percentage
+   - **Performance** - Speed efficiency vs theoretical maximum  
+   - **Quality** - Percentage of defect-free units
+
+3. **Tracking monthly trends** - Calculates OEE per month and identifies performance degradation between months
+
+**Why this matters:** OEE is a manufacturing industry standard that pinpoints whether productivity losses come from equipment downtime, slow operation speeds, or product defects.
+
+## A Detailed Breakdown of what is happening:
+
+
+A simple scenario breakdown of the OEE code and why it is important:
+
+---
+
+## Code Breakdown: A Factory Story
+
+### Meet Our Factory
+
+Imagine you run a **bottle factory**. Each machine should produce **100 bottles per hour** (theoretical rate). Each shift is **7.5 hours** (planned time).
+
+---
+
+### First Code Block: Organizing the Data
+
+**Scenario:** You have a messy notebook with all your factory records mixed together.
+
+```python
+prod = (
+    df[['production_id', 'shift_id', 'date', 'units_produced', 'defect_count']]
+    .drop_duplicates(subset=['production_id'])
+    .copy()
+)
+```
+
+**What's happening:** You create a clean **Production Log** that shows:
+- How many bottles were made
+- How many were defective
+- One entry per production run (no duplicates)
+
+```python
+mach = (
+    df[['machine_id', 'shift_id', 'date', 'downtime_minutes']]
+    .drop_duplicates()
+    .copy()
+)
+```
+
+**What's happening:** You create a separate **Maintenance Log** that shows:
+- How many minutes each machine broke down
+- Organized by machine, shift, and date
+
+**Why separate them?** Because one machine might break down during multiple production runs. Keeping them separate prevents counting the same breakdown twice.
+
+---
+
+### Second Code Block: Calculating OEE (The Scorecard)
+
+**Scenario:** Now you want to grade how well your factory performed each day.
+
+#### Step 1: Calculate Availability (Was the machine running?)
+
+```python
+mach['avail_machine'] = 1 - mach['downtime_minutes']/(PLANNED*60)
+```
+
+**Simple explanation:** 
+- Perfect score = 1.0 (100% available)
+- Each minute of breakdown reduces the score
+
+**Example:** 
+- Your shift is 7.5 hours = 450 minutes
+- Machine broke down for 45 minutes
+- Availability = 1 - (45 ÷ 450) = 0.90 or 90%
+- **Meaning:** Machine was running 90% of the time
+
+#### Step 2: Calculate Performance (Did it run at full speed?)
+
+```python
+merged['performance'] = (merged['units_produced'] / (THEO * PLANNED)).clip(0,1)
+```
+
+**Simple explanation:**
+- Perfect score = 1.0 (100% speed)
+- Slower production reduces the score
+
+**Example:**
+- Theoretical speed = 100 bottles per hour
+- Planned time = 7.5 hours
+- Should have made: 100 × 7.5 = 750 bottles
+- Actually made: 600 bottles
+- Performance = 600 ÷ 750 = 0.80 or 80%
+- **Meaning:** Machine ran at 80% of its target speed
+
+#### Step 3: Calculate Quality (Were the bottles good?)
+
+```python
+merged['quality'] = 1 - merged['defect_count']/merged['units_produced']
+```
+
+**Simple explanation:**
+- Perfect score = 1.0 (100% good products)
+- Each defective product reduces the score
+
+**Example:**
+- Made 600 bottles
+- 30 were cracked (defects)
+- Quality = 1 - (30 ÷ 600) = 0.95 or 95%
+- **Meaning:** 95% of bottles were good, 5% were defective
+
+#### Step 4: Calculate Final OEE Score
+
+```python
+merged['oee_est'] = merged['availability'] * merged['performance'] * merged['quality']
+```
+
+**Example calculation:**
+- Availability = 90% (0.90)
+- Performance = 80% (0.80)
+- Quality = 95% (0.95)
+
+**OEE = 0.90 × 0.80 × 0.95 = 0.684 or 68.4%**
+
+**What this means for the factory owner:**
+
+| Score | Grade | What It Tells You |
+|-------|-------|-------------------|
+| 68.4% | C | You're losing 31.6% of potential production |
+| | | - 10% lost to breakdowns |
+| | | - 20% lost to slow speed |
+| | | - 5% lost to defects |
+
+---
+
+### Monthly Tracking: Spotting Problems Early
+
+```python
+monthly_oee = merged.groupby('month')['oee_est'].mean()
+```
+
+**Scenario:** You track OEE for three months:
+
+| Month | OEE | Change |
+|-------|-----|--------|
+| Month 1 | 75% | Starting point |
+| Month 2 | 70% | ↓ 5% |
+| Month 3 | 65% | ↓ 10% total |
+
+```python
+degradation = (m1 - m3) / m1 * 100
+```
+
+**Result:** 13.3% degradation
+
+**What this tells you:** Something is getting worse over time. Machines might be aging, maintenance might be slipping, or operators might be struggling.
+
+---
+
+### The Big Picture: Why This Matters
+
+**Without OEE:** "Our factory isn't producing enough" (vague problem)
+
+**With OEE:** 
+- "Availability is 90%" → Breakdowns are minimal ✓
+- "Performance is 60%" → Machines running too slow ✗
+- "Quality is 95%" → Defects are fine ✓
+
+**Action Plan:** Focus on improving machine speed (performance), not breakdowns or quality.
+
+---
+
+### Summary Table
+
+| OEE Component | Question It Answers | Example Problem |
+|---------------|---------------------|-----------------|
+| **Availability** | Was the machine running? | Breakdowns, changeovers |
+| **Performance** | Was it running at full speed? | Slow operation, jams |
+| **Quality** | Did it make good products? | Defects, scrap |
+| **OEE** | Overall factory health? | Combined score |
+
+**Perfect Factory (100% OEE):** 
+- Machine never stops (100% availability)
+- Always runs at full speed (100% performance)
+- Every product is perfect (100% quality)
+
+**Real World:** Most factories score 60-85%. The code helps you find exactly where you're losing points.
